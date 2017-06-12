@@ -3,8 +3,6 @@ from __future__ import division
 import random
 
 import networkx as nx
-import inspect
-import os
 
 from icarus.registry import register_strategy
 from icarus.util import inheritdoc, path_links
@@ -132,9 +130,6 @@ class LeaveCopyEverywhere(Strategy):
     @inheritdoc(Strategy)
     def process_event(self, time, receiver, content, log):
         # get all required data
-#        cf = inspect.currentframe();
-#        dbg = inspect.getframeinfo(cf)
-#        print os.path.basename(dbg.filename),':', dbg.lineno, 'content id= ', content[0]
         source = self.view.content_source(content)
         path = self.view.shortest_path(receiver, source)
         # Route requests to original source and queries caches on the path

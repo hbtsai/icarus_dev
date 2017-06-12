@@ -1,8 +1,6 @@
 """Simple networks of caches modeled as single caches."""
 import random
 import numpy as np
-import inspect
-import os
 
 from icarus.util import inheritdoc
 from icarus.tools import DiscreteDist
@@ -56,9 +54,6 @@ class PathCache(object):
             return False
 
     def get(self, k):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         for i in range(self._len):
             if self._caches[i].get(k):
                 break
@@ -149,9 +144,6 @@ class TreeCache(object):
         raise NotImplementedError('This method is not implemented')
 
     def get(self, k):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         self._leaf = random.choice(self._leaf_caches)
         if self._leaf.get(k):
             return True
@@ -253,9 +245,6 @@ class ArrayCache(object):
         raise NotImplementedError('This method is not implemented')
 
     def get(self, k):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         self._selected_cache = self.select_cache()
         return self._selected_cache.get(k)
 
@@ -363,9 +352,6 @@ class ShardedCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         return self._node[self.f_map(k)].get(k)
 
     @inheritdoc(Cache)

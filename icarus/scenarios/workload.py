@@ -22,8 +22,6 @@ import csv
 
 import networkx as nx
 
-import inspect
-
 from icarus.tools import TruncatedZipfDist
 from icarus.registry import register_workload
 
@@ -94,16 +92,11 @@ class StationaryWorkload(object):
                      if topology.node[v]['stack'][0] == 'receiver']
         self.zipf = TruncatedZipfDist(alpha, n_contents)
         self.n_contents = n_contents
-        self.contents = []
-        for i in range(1, n_contents + 1):
-            self.contents.append((i, 0))
+        self.contents = range(1, n_contents + 1)
         self.alpha = alpha
         self.rate = rate
         self.n_warmup = n_warmup
         self.n_measured = n_measured
-
-        self.content_list = [None]
-
         random.seed(seed)
         self.beta = beta
         if beta != 0:
@@ -120,22 +113,7 @@ class StationaryWorkload(object):
                 receiver = random.choice(self.receivers)
             else:
                 receiver = self.receivers[self.receiver_dist.rv() - 1]
-            content = (int(self.zipf.rv()), 0)
-
-
-            if content[0] in self.content_list:
-                print 'found one', content[0]
-
-            self.content_list.extend(content)
-
-# fixme: search content_list for replication
-#        a repeat content id has 30% chance to be a revision
-#        
-            
-
-
-
-#            print 'content=',content[0],'revision=',content[1]
+            content = int(self.zipf.rv())
             log = (req_counter >= self.n_warmup)
             event = {'receiver': receiver, 'content': content, 'log': log}
             yield (t_event, event)

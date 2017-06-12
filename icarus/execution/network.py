@@ -17,9 +17,6 @@ import logging
 import networkx as nx
 import fnss
 
-import inspect
-import os
-
 from icarus.registry import CACHE_POLICY
 from icarus.util import path_links, iround
 
@@ -114,9 +111,6 @@ class NetworkView(object):
             The node persistently storing the given content or None if the
             source is unavailable
         """
-#        cf = inspect.currentframe()
-#        dbg = inspect.getframeinfo(cf)
-#        print os.path.basename(dbg.filename),':', dbg.lineno, 'k= ', k[0]
         return self.model.content_source.get(k, None)
 
     def shortest_path(self, s, t):

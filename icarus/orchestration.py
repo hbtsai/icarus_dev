@@ -13,10 +13,6 @@ import sys
 import signal
 import traceback
 
-
-import os
-import inspect
-
 from icarus.execution import exec_experiment
 from icarus.registry import TOPOLOGY_FACTORY, CACHE_PLACEMENT, CONTENT_PLACEMENT, \
                             CACHE_POLICY, WORKLOAD, DATA_COLLECTOR, STRATEGY
@@ -234,9 +230,6 @@ def run_scenario(settings, params, curr_exp, n_exp):
             logger.error('No content placement implementation named %s was found.'
                          % contpl_name)
             return None
-        cf= inspect.currentframe()
-        dbg= inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno, 'content placement'
         CONTENT_PLACEMENT[contpl_name](topology, workload.contents, **contpl_spec)
 
         # caching and routing strategy definition
