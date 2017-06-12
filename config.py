@@ -213,7 +213,7 @@ PARALLEL_EXECUTION = True
 
 # Number of processes used to run simulations in parallel.
 # This option is ignored if PARALLEL_EXECUTION = False
-N_PROCESSES = 4#cpu_count()
+N_PROCESSES = cpu_count()
 
 # Granularity of caching.
 # Currently, only OBJECT is supported
@@ -226,7 +226,7 @@ RESULTS_FORMAT = 'PICKLE'
 
 # Number of times each experiment is replicated
 # This is necessary for extracting confidence interval of selected metrics
-N_REPLICATIONS = 2
+N_REPLICATIONS = 1
 
 # List of metrics to be measured in the experiments
 # The implementation of data collectors are located in ./icaurs/execution/collectors.py
@@ -258,7 +258,7 @@ N_MEASURED_REQUESTS = 6*10**5
 REQ_RATE = 1.0
 
 # Cache eviction policy
-CACHE_POLICY = 'IN_CACHE_LFU'
+CACHE_POLICY = 'SLRU'
 
 # Zipf alpha parameter, remove parameters not needed
 #ALPHA = [0.6, 0.8, 1.0]
@@ -267,7 +267,7 @@ ALPHA = [0.6, 1.0]
 # Total size of network cache as a fraction of content population
 # Remove sizes not needed
 #NETWORK_CACHE = [0.004, 0.002]
-NETWORK_CACHE = [0.004, 0.3]
+NETWORK_CACHE = [0.01]
 
 
 # List of topologies tested
@@ -276,7 +276,7 @@ NETWORK_CACHE = [0.004, 0.3]
 TOPOLOGIES =  [
         'GEANT',
 #        'WIDE',
-#        'GARR',
+        'GARR',
 #        'TISCALI',
               ]
 
@@ -285,13 +285,13 @@ TOPOLOGIES =  [
 # Remove strategies not needed
 STRATEGIES = [
      'LCE',             # Leave Copy Everywhere
-     'NO_CACHE',        # No caching, shortest-path routing
+#     'NO_CACHE',        # No caching, shortest-path routing
 #     'HR_SYMM',         # Symmetric hash-routing
 #     'HR_ASYMM',        # Asymmetric hash-routing
 #     'HR_MULTICAST',    # Multicast hash-routing
 #     'HR_HYBRID_AM',    # Hybrid Asymm-Multicast hash-routing
 #     'HR_HYBRID_SM',    # Hybrid Symm-Multicast hash-routing
-#     'CL4M',            # Cache less for more
+     'CL4M',            # Cache less for more
 #     'PROB_CACHE',      # ProbCache
 #     'LCD',             # Leave Copy Down
 #     'RAND_CHOICE',     # Random choice: cache in one random cache on path
