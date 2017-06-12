@@ -10,8 +10,6 @@ import abc
 import copy
 
 import numpy as np
-import inspect
-import os
 
 from icarus.util import inheritdoc, apportionment
 from icarus.registry import register_cache_policy
@@ -791,9 +789,6 @@ class BeladyMinCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         self._next[k].popleft()
         return k in self._cache
 
@@ -819,6 +814,147 @@ class BeladyMinCache(Cache):
     @inheritdoc(Cache)
     def clear(self):
         self._cache.clear()
+
+
+@register_cache_policy('2Q')
+class TwoQueueCache(Cache):
+    """Two Queue (2Q) cache eviction policy.
+
+    """
+
+    @inheritdoc(Cache)
+    def __init__(self, maxlen, **kwargs):
+        self._A1 = LinkedSet()
+        self._Am = LinkedSet()
+        self._maxlen = int(maxlen)
+        self._a1len = self._maxlen / 5 
+        self._amlen = self._maxlen - self._a1len
+        self._cache = {}
+        if self._maxlen <= 0:
+            raise ValueError('maxlen must be positive')
+
+    @inheritdoc(Cache)
+    def __len__(self):
+        return len(self._cache)
+
+    @property
+    @inheritdoc(Cache)
+    def maxlen(self):
+        return self._maxlen
+
+    @inheritdoc(Cache)
+    def dump(self):
+        return list(iter(self._cache))
+
+    def position(self, k, *args, **kwargs):
+        """Return the current position of an item in the cache. Position *0*
+        refers to the head of cache (i.e. most recently used item), while
+        position *maxlen - 1* refers to the tail of the cache (i.e. the least
+        recently used item).
+
+        This method does not change the internal state of the cache.
+
+        Parameters
+        ----------
+        k : any hashable type
+            The item looked up in the cache
+
+        Returns
+        -------
+        position : int
+            The current position of the item in the cache
+        """
+        if not k in self._cache:
+            raise ValueError('The item %s is not in the cache' % str(k))
+        if k in self._A1:
+            position = self._A1.index(k)
+        else:
+            position = self._Am.index(k) + self._a1len
+        return position
+
+    @inheritdoc(Cache)
+    def has(self, k, *args, **kwargs):
+        return k in self._cache
+
+    @inheritdoc(Cache)
+    def get(self, k, *args, **kwargs):
+        # search content over the list
+        # if it has it push on top, otherwise return false
+        if k not in self._cache:
+            return False
+        op = self._cache[k]
+        if op == 1:
+            self._A1.remove(k)
+            self._Am.append_top(k)
+            self._cache[k] = 0
+            if len(self._Am) > self._amlen:
+                evicted = self._Am.pop_bottom()
+                self._cache.pop(evicted)
+        else:
+            self._Am.move_to_top(k)
+#        self._cache.move_to_top(k)
+        return True
+
+    def put(self, k, *args, **kwargs):
+        """Insert an item in the cache if not already inserted.
+
+        If the element is already present in the cache, it will pushed to the
+        top of the cache.
+
+        Parameters
+        ----------
+        k : any hashable type
+            The item to be inserted
+
+        Returns
+        -------
+        evicted : any hashable type
+            The evicted object or *None* if no contents were evicted.
+        """
+        # if content in cache, push it on top, no eviction
+        if k in self._cache:
+            op = self._cache[k]
+            if op == 1:
+#                print ('k is one-pass, move' , k , 'to Am')
+                self._A1.remove(k)
+                self._Am.append_top(k)
+                self._cache[k] = 0 # not op (one-pass)
+                if len(self._Am) > self._amlen:
+                    evicted = self._Am.pop_bottom()
+                    self._cache.pop(evicted)
+            else:
+#                print ('k is not one-pass, move' , k , 'to Am top')
+                self._Am.move_to_top(k)
+        else:
+            # if content not in cache append it on top
+#            print ('k is one-pass, insert' , k , 'to A1 top')
+            self._A1.append_top(k)
+            self._cache[k] = 1 # op (one-pass)
+            if len(self._A1) > self._a1len:
+                evicted = self._A1.pop_bottom()
+                self._cache.pop(evicted)
+        return None
+#        self._cache.append_top(k)
+#        return self._cache.pop_bottom() if len(self._cache) > self._maxlen else None
+
+    @inheritdoc(Cache)
+    def remove(self, k, *args, **kwargs):
+        if k not in self._cache:
+            return False
+        op = self._cache[k]
+        if op == 1:
+            self._A1.remove(k)
+        else:
+            self._Am.remove(k)
+        self._cache.pop(k)
+        return True
+
+    @inheritdoc(Cache)
+    def clear(self):
+        self._cache.clear()
+        self._A1.clear()
+        self._Am.clear()
+
 
 
 @register_cache_policy('LRU')
@@ -884,9 +1020,6 @@ class LruCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         # search content over the list
         # if it has it push on top, otherwise return false
         if k not in self._cache:
@@ -996,9 +1129,6 @@ class SegmentedLruCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         if k not in self._cache:
             return False
         seg = self._cache[k]
@@ -1146,9 +1276,6 @@ class InCacheLfuCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-     #   cf = inspect.currentframe()
-     #   dbg = inspect.getframeinfo(cf)
-     #   print os.path.basename(dbg.filename), ':', dbg.lineno
         if self.has(k):
             freq, t = self._cache[k]
             self._cache[k] = freq + 1, t
@@ -1231,9 +1358,6 @@ class PerfectLfuCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         self.t += 1
         if k in self._counter:
             freq, t = self._counter[k]
@@ -1340,9 +1464,6 @@ class FifoCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         return self.has(k)
 
     @inheritdoc(Cache)
@@ -1428,9 +1549,6 @@ class ClimbCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         # search content over the list
         # if it has it move it one position up, otherwise return false
         if k not in self._cache:
@@ -1522,9 +1640,6 @@ class RandEvictionCache(Cache):
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         return self.has(k)
 
     @inheritdoc(Cache)
@@ -1732,9 +1847,6 @@ def keyval_cache(cache):
             return evicted, val
 
     def get(k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         """Retrieve an item from the cache.
 
         Differently from *has(k)*, calling this method may change the internal
@@ -1890,9 +2002,6 @@ def ttl_cache(cache, f_time):
         cache._purge_till(cache.f_time())
 
     def get(k, *args, **kwargs):
-        cf = inspect.currentframe()
-        dbg = inspect.getframeinfo(cf)
-        print os.path.basename(dbg.filename), ':', dbg.lineno
         if c_get(k):
             if cache.f_time() < cache.expiry[k]:
                 return True
