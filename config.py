@@ -258,7 +258,7 @@ N_MEASURED_REQUESTS = 6*10**5
 REQ_RATE = 1.0
 
 # Cache eviction policy
-CACHE_POLICY = 'SLRU'
+CACHE_POLICY = 'LRU'
 
 # Zipf alpha parameter, remove parameters not needed
 #ALPHA = [0.6, 0.8, 1.0]
