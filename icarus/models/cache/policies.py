@@ -1001,18 +1001,17 @@ class ArcCache(Cache):
 
 @register_cache_policy('LIRS')
 class LirsCache(Cache):
-    """LIRS (Low Inter-reference Recency Set) cache eviction policy.
-
-    """
+    #LIRS (Low Inter-reference Recency Set) cache eviction policy.
 
     @inheritdoc(Cache)
     def __init__(self, maxlen, **kwargs):
-        self._log = LinkedSet()
         self._s = LinkedSet() # LIRS stack S
         self._q = LinkedSet() # resident HIRS list Q
+        self._state = {}
         self._maxlen = int(maxlen)
         self._qlen = self._maxlen / 100 
-        self._cache = {}
+        self._cache = LinkedSet()
+        self._vtime = 0
         if self._maxlen <= 0:
             raise ValueError('maxlen must be positive')
 
@@ -1035,17 +1034,18 @@ class LirsCache(Cache):
         if not k in self._cache:
             raise ValueError('The item %s is not in the cache' % str(k))
         return self._cache.index(k)
-    """
-        if k in self._A1:
-            position = self._A1.index(k)
-        else:
-            position = self._Am.index(k) + self._a1len
-        return position
-    """
 
     @inheritdoc(Cache)
     def has(self, k, *args, **kwargs):
         return k in self._cache
+
+    def stack_pruning(self):
+        x = self._s.bottom()
+        while self._state[x] != 'lir':
+            self._s.remove(x)
+            self._state.remove(x)
+            x = self._s.bottom()
+
 
     @inheritdoc(Cache)
     def get(self, k, *args, **kwargs):
@@ -1053,17 +1053,33 @@ class LirsCache(Cache):
         # if it has it push on top, otherwise return false
         if k not in self._cache:
             return False
-        op = self._cache[k]
-        if op == 1:
-            self._A1.remove(k)
-            self._Am.append_top(k)
-            self._cache[k] = 0
-            if len(self._Am) > self._amlen:
-                evicted = self._Am.pop_bottom()
-                self._cache.pop(evicted)
+
+        self._vtime += 1
+        if self._state[k] == 'lir':
+            x = self._s.bottom()
+            self._s.move_to_top(k)
+            if k == x:
+                self.stack_pruning()
+
+        elif self._state[k] == 'hir':
+            if k in self._s:
+                self._s.state[k] = 'lir'
+                self._s.move_to_top(k)
+                self._q.remove(k)
+                x = self._s.bottom()
+                self._state[x] = 'hir'
+                self._q.append_top(x)
+                self.stack_pruning()
+            else:
+                self._q.move_to_top(k)
+                self._s.append_top(k)
+
+#        elif self._state[k] == 'nhir':
+
         else:
-            self._Am.move_to_top(k)
-#        self._cache.move_to_top(k)
+            raise ValueError('state of content %s is not found' % str(k))
+
+
         return True
 
     def put(self, k, *args, **kwargs):
@@ -1084,47 +1100,20 @@ class LirsCache(Cache):
         """
         # if content in cache, push it on top, no eviction
         if k in self._cache:
-            op = self._cache[k]
-            if op == 1:
-#                print ('k is one-pass, move' , k , 'to Am')
-                self._A1.remove(k)
-                self._Am.append_top(k)
-                self._cache[k] = 0 # not op (one-pass)
-                if len(self._Am) > self._amlen:
-                    evicted = self._Am.pop_bottom()
-                    self._cache.pop(evicted)
-            else:
-#                print ('k is not one-pass, move' , k , 'to Am top')
-                self._Am.move_to_top(k)
         else:
-            # if content not in cache append it on top
-#            print ('k is one-pass, insert' , k , 'to A1 top')
-            self._A1.append_top(k)
-            self._cache[k] = 1 # op (one-pass)
-            if len(self._A1) > self._a1len:
-                evicted = self._A1.pop_bottom()
-                self._cache.pop(evicted)
+        self._vtime += 1
         return None
-#        self._cache.append_top(k)
-#        return self._cache.pop_bottom() if len(self._cache) > self._maxlen else None
 
     @inheritdoc(Cache)
     def remove(self, k, *args, **kwargs):
         if k not in self._cache:
             return False
-        op = self._cache[k]
-        if op == 1:
-            self._A1.remove(k)
-        else:
-            self._Am.remove(k)
         self._cache.pop(k)
         return True
 
     @inheritdoc(Cache)
     def clear(self):
         self._cache.clear()
-        self._A1.clear()
-        self._Am.clear()
 
 @register_cache_policy('2Q')
 class TwoQueueCache(Cache):
