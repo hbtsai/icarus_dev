@@ -1040,11 +1040,11 @@ class LirsCache(Cache):
         return k in self._cache
 
     def stack_pruning(self):
-        x = self._s.bottom()
-        while self._state[x] != 'lir':
+        x = self._s.bottom
+        while x is not None and self._state[x] != 'lir':
             self._s.remove(x)
-            self._state.remove(x)
-            x = self._s.bottom()
+            del self._state[x]
+            x = self._s.bottom
 
 
     @inheritdoc(Cache)
@@ -1054,19 +1054,19 @@ class LirsCache(Cache):
         if k not in self._cache:
             return False
 
-        self._vtime += 1
+        #self._vtime += 1
         if self._state[k] == 'lir':
-            x = self._s.bottom()
+            x = self._s.bottom
             self._s.move_to_top(k)
             if k == x:
                 self.stack_pruning()
 
         elif self._state[k] == 'hir':
             if k in self._s:
-                self._s.state[k] = 'lir'
+                self._state[k] = 'lir'
                 self._s.move_to_top(k)
                 self._q.remove(k)
-                x = self._s.bottom()
+                x = self._s.bottom
                 self._state[x] = 'hir'
                 self._q.append_top(x)
                 self.stack_pruning()
@@ -1100,8 +1100,32 @@ class LirsCache(Cache):
         """
         # if content in cache, push it on top, no eviction
         if k in self._cache:
+            if k in self._s:
+                self._s.move_to_top(k)
+            if k in self._q:
+                self._q.move_to_top(k)
         else:
-        self._vtime += 1
+            if len(self._cache) == self._maxlen:
+                evicted = self._q.pop_bottom()
+                if evicted is not None:
+                    self._cache.remove(evicted)
+            if k in self._s:
+                self._state[k] = 'lir'
+                self._s.move_to_top(k)
+                x = self._s.pop_bottom()
+                self._state[x] = 'hir'
+                self._q.append_top(x)
+                self.stack_pruning()
+            else:
+                self._state[k] = 'hir'
+                self._q.append_top(k)
+                self._s.append_top(k)
+            self._cache.append_top(k)
+
+        if len(self._cache) > self._maxlen:
+            raise ValueError('cache exceeds its capacity')
+    
+        #self._vtime += 1
         return None
 
     @inheritdoc(Cache)
