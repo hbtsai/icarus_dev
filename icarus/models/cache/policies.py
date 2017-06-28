@@ -1009,7 +1009,8 @@ class LirsCache(Cache):
         self._q = LinkedSet() # resident HIRS list Q
         self._state = {}
         self._maxlen = int(maxlen)
-        self._qlen = self._maxlen / 100 
+        self._qlen = int(self._maxlen / 100 ) + 1
+        self._slen = self._maxlen - self._qlen
         self._cache = LinkedSet()
         self._vtime = 0
         if self._maxlen <= 0:
@@ -1043,7 +1044,10 @@ class LirsCache(Cache):
         x = self._s.bottom
         while x is not None and self._state[x] != 'lir':
             self._s.remove(x)
-            del self._state[x]
+            if self._state[x] == 'nhir':
+                del self._state[x]
+                if x in self._q:
+                    raise ValueError('non-resident HIR should not be in Stack Q')
             x = self._s.bottom
 
 
@@ -1056,26 +1060,22 @@ class LirsCache(Cache):
 
         #self._vtime += 1
         if self._state[k] == 'lir':
-            x = self._s.bottom
             self._s.move_to_top(k)
-            if k == x:
-                self.stack_pruning()
-
+            self.stack_pruning()
         elif self._state[k] == 'hir':
             if k in self._s:
                 self._state[k] = 'lir'
                 self._s.move_to_top(k)
                 self._q.remove(k)
-                x = self._s.bottom
+                x = self._s.pop_bottom()
                 self._state[x] = 'hir'
                 self._q.append_top(x)
+                if k not in self._cache:
+                    raise ValueError('content %s in Q should be in cache' % str(x))
                 self.stack_pruning()
             else:
                 self._q.move_to_top(k)
                 self._s.append_top(k)
-
-#        elif self._state[k] == 'nhir':
-
         else:
             raise ValueError('state of content %s is not found' % str(k))
 
@@ -1099,28 +1099,60 @@ class LirsCache(Cache):
             The evicted object or *None* if no contents were evicted.
         """
         # if content in cache, push it on top, no eviction
+
+
         if k in self._cache:
             if k in self._s:
                 self._s.move_to_top(k)
-            if k in self._q:
-                self._q.move_to_top(k)
-        else:
-            if len(self._cache) == self._maxlen:
-                evicted = self._q.pop_bottom()
-                if evicted is not None:
-                    self._cache.remove(evicted)
-            if k in self._s:
-                self._state[k] = 'lir'
-                self._s.move_to_top(k)
-                x = self._s.pop_bottom()
-                self._state[x] = 'hir'
-                self._q.append_top(x)
                 self.stack_pruning()
+            elif k in self._q:
+                self._q.move_to_top(k)
             else:
-                self._state[k] = 'hir'
-                self._q.append_top(k)
+                raise ValueError('content is in cache, but not in S or Q')
+        else:
+            if len(self._s) < self._slen:
+                self._state[k] = 'lir'
                 self._s.append_top(k)
-            self._cache.append_top(k)
+                self._cache.append_top(k)
+            elif len(self._q) < self._qlen:
+                self._state[k] = 'hir'
+                self._s.append_top(k)
+                self._q.append_top(k)
+                self._cache.append_top(k)
+                if k not in self._cache:
+                    raise ValueError('content %s in Q should be in cache' % str(x))
+            else:
+                if len(self._s) + len(self._q) < self._maxlen:
+                    raise ValueError('still have capacity, should not be here')
+
+                evicted = self._q.pop_bottom()
+                self._state[evicted] = 'nhir'
+                self._cache.remove(evicted)
+                self._cache.append_top(k)
+                
+
+                if k in self._s:
+                    self._state[k] = 'lir'
+                    self._s.move_to_top(k)
+                    x = self._s.pop_bottom()
+                    if self._state[x] != 'lir':
+                        print 'accessed k: ', k, 'evicted: ', evicted , 'S bottom: ', x, 'state: ', self._state[x]
+                    self._state[x] = 'hir'
+                    self._q.append_top(x)
+                    if x not in self._cache:
+                        raise ValueError('content %s in Q should be in cache' % str(x))
+                    self.stack_pruning()
+                else:
+                    self._state[k] = 'hir'
+                    self._q.append_top(k)
+                    if k not in self._cache:
+                        raise ValueError('content %s in Q should be in cache' % str(x))
+                    self._s.append_top(k)
+
+
+
+        if k not in self._state:
+            raise ValueError('content %s is stateless, why?' % str(k))
 
         if len(self._cache) > self._maxlen:
             raise ValueError('cache exceeds its capacity')
