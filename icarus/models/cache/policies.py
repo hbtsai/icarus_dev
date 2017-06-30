@@ -9,6 +9,8 @@ import random
 import abc
 import copy
 
+import heapq
+
 import numpy as np
 
 from icarus.util import inheritdoc, apportionment
@@ -22,6 +24,7 @@ __all__ = [
         'BeladyMinCache',
         'TwoQueueCache',
         'LirsCache',
+        'TimeShiftCache',
         'ArcCache',
         'LruCache',
         'SegmentedLruCache',
@@ -1171,6 +1174,131 @@ class LirsCache(Cache):
     def clear(self):
         self._cache.clear()
 
+
+@register_cache_policy('TSLRU')
+class TimeShiftCache(Cache):
+    """Time Shift (TSLRU) cache eviction policy.
+
+    """
+
+    @inheritdoc(Cache)
+    def __init__(self, maxlen, **kwargs):
+        self._maxlen = int(maxlen)
+        self._cache = LinkedSet()
+        self._vtime = 0
+        self._timestamp = {}
+        self._Lg = LinkedSet()
+        self._Lq = LinkedSet()
+        self._Lh = {}
+        self._Lqlen = int(self._maxlen / 100)  + 1
+        self._Lglen = self._maxlen
+        if self._maxlen <= 0:
+            raise ValueError('maxlen must be positive')
+
+    @inheritdoc(Cache)
+    def __len__(self):
+        return len(self._cache)
+
+    @property
+    @inheritdoc(Cache)
+    def maxlen(self):
+        return self._maxlen
+
+    @inheritdoc(Cache)
+    def dump(self):
+        return list(iter(self._cache))
+
+    def position(self, k, *args, **kwargs):
+        if not k in self._cache:
+            raise ValueError('The item %s is not in the cache' % str(k))
+        return self._cache.index(k)
+
+    @inheritdoc(Cache)
+    def has(self, k, *args, **kwargs):
+        return k in self._cache
+
+    @inheritdoc(Cache)
+    def get(self, k, *args, **kwargs):
+        # search content over the list
+        # if it has it push on top, otherwise return false
+        self._vtime += 1 
+        if k not in self._cache:
+            return False
+
+        irr = self._vtime - self._timestamp[k]
+        self._timestamp[k] = self._vtime
+        if irr < self._maxlen:
+            self._timestamp[k] += 2*self._maxlen
+        elif irr < 2*self._maxlen:
+            self._timestamp[k] += self._maxlen
+
+        if k in self._Lq:
+            self._Lq.remove(k)
+            self._Lh[k] = self._timestamp[k]
+        elif k in self._Lh:
+            self._Lh[k] = self._timestamp[k]
+        else:
+            raise ValueError('a content in cache is not found in Lq and Lh')
+
+
+        return True
+
+    def put(self, k, *args, **kwargs):
+        # if content in cache, push it on top, no eviction
+        self._vtime += 1 
+
+        if k in self._cache:
+            irr = self._vtime - self._timestamp[k]
+            self._timestamp[k] = self._vtime
+            if irr < self._maxlen:
+                self._timestamp[k] += 2*self._maxlen
+            elif irr < 2*self._maxlen:
+                self._timestamp[k] += self._maxlen
+
+            if k in self._Lq:
+                self._Lq.remove(k)
+                self._Lh[k] = self._timestamp[k]
+            elif k in self._Lh:
+                self._Lh[k] = self._timestamp[k]
+        else:
+            if len(self._cache) == self._maxlen:
+                if len(self._Lq) > self._Lqlen:
+                    evicted = self._Lq.pop_bottom()
+                else:
+                    lru = float('inf')
+                    for x in self._Lh:
+                        if self._Lh[x] < lru:
+                            evicted = x
+                            lru = self._Lh[x]
+                    del self._Lh[evicted]
+                self._cache.remove(evicted)
+                self._Lg.append_top(evicted)
+                if len(self._Lg) == self._Lglen:
+                    x = self._Lg.pop_bottom()
+                    del self._timestamp[x]
+
+            self._timestamp[k] = self._vtime
+            if k in self._Lg:
+                self._Lh[k] = self._timestamp[k]
+                self._Lg.remove(k)
+            else:
+                self._Lq.append_top(k)
+            self._cache.append_top(k)
+
+
+        return None
+
+    @inheritdoc(Cache)
+    def remove(self, k, *args, **kwargs):
+        if k not in self._cache:
+            return False
+        self._cache.pop(k)
+        return True
+
+    @inheritdoc(Cache)
+    def clear(self):
+        self._cache.clear()
+
 @register_cache_policy('2Q')
 class TwoQueueCache(Cache):
     """Two Queue (2Q) cache eviction policy.
@@ -1222,13 +1350,6 @@ class TwoQueueCache(Cache):
         if not k in self._cache:
             raise ValueError('The item %s is not in the cache' % str(k))
         return self._cache.index(k)
-    """
-        if k in self._A1:
-            position = self._A1.index(k)
-        else:
-            position = self._Am.index(k) + self._a1len
-        return position
-    """
 
     @inheritdoc(Cache)
     def has(self, k, *args, **kwargs):
