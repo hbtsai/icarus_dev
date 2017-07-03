@@ -1,6 +1,7 @@
 """Implementations of all on-path strategies"""
 from __future__ import division
 import random
+import time as timer
 
 import networkx as nx
 
@@ -55,6 +56,7 @@ class Partition(Strategy):
         self.controller.start_session(time, receiver, content, log)
         cache = self.cache_assignment[receiver]
         self.controller.forward_request_path(receiver, cache)
+
         if not self.controller.get_content(cache):
             self.controller.forward_request_path(cache, source)
             self.controller.get_content(source)
@@ -126,6 +128,7 @@ class LeaveCopyEverywhere(Strategy):
     @inheritdoc(Strategy)
     def __init__(self, view, controller, **kwargs):
         super(LeaveCopyEverywhere, self).__init__(view, controller)
+        self.betw = nx.betweenness_centrality(view.topology())
 
     @inheritdoc(Strategy)
     def process_event(self, time, receiver, content, log):
@@ -133,8 +136,6 @@ class LeaveCopyEverywhere(Strategy):
         hop = 0
         source = self.view.content_source(content)
         path = self.view.shortest_path(receiver, source)
-        print 'source=',source
-        print 'path=', path
         # Route requests to original source and queries caches on the path
         self.controller.start_session(time, receiver, content, log)
         for u, v in path_links(path):
@@ -153,7 +154,7 @@ class LeaveCopyEverywhere(Strategy):
             self.controller.forward_content_hop(u, v)
             if self.view.has_cache(v):
                 # insert content
-                self.controller.put_content(v, hop)
+                self.controller.put_content(v, hop, betw=self.betw[v])
         self.controller.end_session()
 
 
@@ -336,7 +337,7 @@ class CacheLessForMore(Strategy):
         for u, v in path_links(path):
             self.controller.forward_content_hop(u, v)
             if v == designated_cache:
-                self.controller.put_content(v)
+                self.controller.put_content(v, betw=self.betw)
         self.controller.end_session()
 
 

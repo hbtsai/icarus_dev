@@ -546,7 +546,7 @@ class NetworkController(object):
         if self.collector is not None and self.session['log']:
             self.collector.content_hop(u, v, main_path)
 
-    def put_content(self, node, hop=0):
+    def put_content(self, node, hop=0, betw=0):
         """Store content in the specified node.
 
         The node must have a cache stack and the actual insertion of the
@@ -565,7 +565,7 @@ class NetworkController(object):
             The evicted object or *None* if no contents were evicted.
         """
         if node in self.model.cache:
-            return self.model.cache[node].put(self.session['content'], hop)
+            return self.model.cache[node].put(self.session['content'], hop=hop, betw=betw )
 
     def get_content(self, node):
         """Get a content from a server or a cache.

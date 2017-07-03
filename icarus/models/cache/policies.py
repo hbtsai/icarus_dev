@@ -27,6 +27,8 @@ __all__ = [
         'TimeShiftCache',
         'ArcCache',
         'LruCache',
+        'CentralityLruCache',
+        'HopLruCache',
         'SegmentedLruCache',
         'InCacheLfuCache',
         'PerfectLfuCache',
@@ -1434,6 +1436,121 @@ class TwoQueueCache(Cache):
         self._A1.clear()
         self._Am.clear()
 
+@register_cache_policy('CLRU')
+class CentralityLruCache(Cache):
+    """Least Recently Used (LRU) cache eviction policy.
+
+    According to this policy, When a new item needs to inserted into the cache,
+    it evicts the least recently requested one.
+    This eviction policy is efficient for line speed operations because both
+    search and replacement tasks can be performed in constant time (*O(1)*).
+
+    This policy has been shown to perform well in the presence of temporal
+    locality in the request pattern. However, its performance drops under the
+    Independent Reference Model (IRM) assumption (i.e. the probability that an
+    item is requested is not dependent on previous requests).
+    """
+
+    @inheritdoc(Cache)
+    def __init__(self, maxlen, **kwargs):
+        self._cache = LinkedSet()
+        self._maxlen = int(maxlen)
+        if self._maxlen <= 0:
+            raise ValueError('maxlen must be positive')
+
+    @inheritdoc(Cache)
+    def __len__(self):
+        return len(self._cache)
+
+    @property
+    @inheritdoc(Cache)
+    def maxlen(self):
+        return self._maxlen
+
+    @inheritdoc(Cache)
+    def dump(self):
+        return list(iter(self._cache))
+
+    def position(self, k, *args, **kwargs):
+        """Return the current position of an item in the cache. Position *0*
+        refers to the head of cache (i.e. most recently used item), while
+        position *maxlen - 1* refers to the tail of the cache (i.e. the least
+        recently used item).
+
+        This method does not change the internal state of the cache.
+
+        Parameters
+        ----------
+        k : any hashable type
+            The item looked up in the cache
+
+        Returns
+        -------
+        position : int
+            The current position of the item in the cache
+        """
+        if not k in self._cache:
+            raise ValueError('The item %s is not in the cache' % str(k))
+        return self._cache.index(k)
+
+    @inheritdoc(Cache)
+    def has(self, k, *args, **kwargs):
+        return k in self._cache
+
+    @inheritdoc(Cache)
+    def get(self, k, *args, **kwargs):
+        # search content over the list
+        # if it has it push on top, otherwise return false
+        if k not in self._cache:
+            return False
+        self._cache.move_to_top(k)
+        return True
+
+    def put(self, k, *args, **kwargs):
+        """Insert an item in the cache if not already inserted.
+
+        If the element is already present in the cache, it will pushed to the
+        top of the cache.
+
+        Parameters
+        ----------
+        k : any hashable type
+            The item to be inserted
+
+        Returns
+        -------
+        evicted : any hashable type
+            The evicted object or *None* if no contents were evicted.
+        """
+        # if content in cache, push it on top, no eviction
+        if k in self._cache:
+            self._cache.move_to_top(k)
+            return None
+        # if content not in cache append it on top
+
+        if kwargs['betw'] > 0.2:
+# add to freq list 
+        else:
+                #add to recent list
+
+
+        if len(self._cache) == self._maxlen:
+            self._cache.pop_bottom()
+
+        self._cache.append_top(k)
+
+        return True
+
+    @inheritdoc(Cache)
+    def remove(self, k, *args, **kwargs):
+        if k not in self._cache:
+            return False
+        self._cache.remove(k)
+        return True
+
+    @inheritdoc(Cache)
+    def clear(self):
+        self._cache.clear()
 
 
 @register_cache_policy('LRU')
@@ -1527,8 +1644,135 @@ class LruCache(Cache):
             self._cache.move_to_top(k)
             return None
         # if content not in cache append it on top
+
+        if len(self._cache) == self._maxlen:
+            self._cache.pop_bottom()
+
         self._cache.append_top(k)
-        return self._cache.pop_bottom() if len(self._cache) > self._maxlen else None
+
+        return True
+
+    @inheritdoc(Cache)
+    def remove(self, k, *args, **kwargs):
+        if k not in self._cache:
+            return False
+        self._cache.remove(k)
+        return True
+
+    @inheritdoc(Cache)
+    def clear(self):
+        self._cache.clear()
+
+
+@register_cache_policy('HLRU')
+class HopLruCache(Cache):
+    """Least Recently Used (LRU) cache eviction policy.
+
+    According to this policy, When a new item needs to inserted into the cache,
+    it evicts the least recently requested one.
+    This eviction policy is efficient for line speed operations because both
+    search and replacement tasks can be performed in constant time (*O(1)*).
+
+    This policy has been shown to perform well in the presence of temporal
+    locality in the request pattern. However, its performance drops under the
+    Independent Reference Model (IRM) assumption (i.e. the probability that an
+    item is requested is not dependent on previous requests).
+    """
+
+    @inheritdoc(Cache)
+    def __init__(self, maxlen, **kwargs):
+        self._cache = LinkedSet()
+        self._hops = {}
+        self._maxlen = int(maxlen)
+        if self._maxlen <= 0:
+            raise ValueError('maxlen must be positive')
+
+    @inheritdoc(Cache)
+    def __len__(self):
+        return len(self._cache)
+
+    @property
+    @inheritdoc(Cache)
+    def maxlen(self):
+        return self._maxlen
+
+    @inheritdoc(Cache)
+    def dump(self):
+        return list(iter(self._cache))
+
+    def position(self, k, *args, **kwargs):
+        """Return the current position of an item in the cache. Position *0*
+        refers to the head of cache (i.e. most recently used item), while
+        position *maxlen - 1* refers to the tail of the cache (i.e. the least
+        recently used item).
+
+        This method does not change the internal state of the cache.
+
+        Parameters
+        ----------
+        k : any hashable type
+            The item looked up in the cache
+
+        Returns
+        -------
+        position : int
+            The current position of the item in the cache
+        """
+        if not k in self._cache:
+            raise ValueError('The item %s is not in the cache' % str(k))
+        return self._cache.index(k)
+
+    @inheritdoc(Cache)
+    def has(self, k, *args, **kwargs):
+        return k in self._cache
+
+    @inheritdoc(Cache)
+    def get(self, k, *args, **kwargs):
+        # search content over the list
+        # if it has it push on top, otherwise return false
+        if k not in self._cache:
+            return False
+        self._cache.move_to_top(k)
+        return True
+
+    def put(self, k, *args, **kwargs):
+        """Insert an item in the cache if not already inserted.
+
+        If the element is already present in the cache, it will pushed to the
+        top of the cache.
+
+        Parameters
+        ----------
+        k : any hashable type
+            The item to be inserted
+
+        Returns
+        -------
+        evicted : any hashable type
+            The evicted object or *None* if no contents were evicted.
+        """
+        # if content in cache, push it on top, no eviction
+        if k in self._cache:
+            self._cache.move_to_top(k)
+            self._hops[k] = kwargs['hop']
+            return None
+        # if content not in cache append it on top
+
+        count = self._maxlen/10
+
+        if len(self._cache) == self._maxlen:
+            x = self._cache.bottom
+            while self._hops[x] / 2 > 1 or count == 0:
+                self._cache.move_to_top(x)
+                self._hops[x] = 0
+                x = self._cache.bottom
+                count -= 1
+            self._cache.pop_bottom()
+
+        self._cache.append_top(k)
+        self._hops[k] = kwargs['hop']
+
+        return True
 
     @inheritdoc(Cache)
     def remove(self, k, *args, **kwargs):
