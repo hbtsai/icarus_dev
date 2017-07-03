@@ -343,6 +343,7 @@ class Settings(object):
         """
         if self.__frozen:
             raise ValueError('Settings are frozen and cannot be modified')
+
         exec(open(path).read(), self.__conf)
         for k in list(self.__conf):
             if k != k.upper():
