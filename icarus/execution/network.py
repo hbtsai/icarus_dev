@@ -325,7 +325,7 @@ class NetworkModel(object):
     calls to the network controller.
     """
 
-    def __init__(self, topology, cache_policy, shortest_path=None):
+    def __init__(self, topology, cache_policy, betw=None, shortest_path=None):
         """Constructor
 
         Parameters
@@ -388,11 +388,32 @@ class NetworkModel(object):
                 if cache_size[node] < 1:
                     cache_size[node] = 1
 
+
+        #print 'cache_policy=', cache_policy
+
         policy_name = cache_policy['name']
         policy_args = {k: v for k, v in cache_policy.items() if k != 'name'}
+
+
+        max_betw = -1
+        avg_betw = 0
+        for node in betw:
+            avg_betw += betw[node]
+            if betw[node] > max_betw:
+                max_betw = betw[node]
+        avg_betw /= len(betw)
+
+        #print 'betw=', betw
         # The actual cache objects storing the content
-        self.cache = {node: CACHE_POLICY[policy_name](cache_size[node], **policy_args)
-                          for node in cache_size}
+#        self.cache = {node: CACHE_POLICY[policy_name](cache_size[node], central_router=[False,True][betw[node]>avg_betw], betw=betw[node],avg_betw=avg_betw, **policy_args)
+#                          for node in cache_size}
+        self.cache ={}
+
+        for node in cache_size:
+            if betw[node] > avg_betw:
+                self.cache[node] = CACHE_POLICY['IN_CACHE_LFU'](cache_size[node],  **policy_args)
+            else:
+                self.cache[node] = CACHE_POLICY['LRU'](cache_size[node],  **policy_args)
 
         # This is for a local un-coordinated cache (currently used only by
         # Hashrouting with edge cache)

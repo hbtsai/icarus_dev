@@ -204,7 +204,7 @@ def run_scenario(settings, params, curr_exp, n_exp):
             logger.error('No workload implementation named %s was found.'
                          % workload_name)
             return None
-        print workload_spec['reqs_file']
+        #print workload_spec['reqs_file']
         workload = WORKLOAD[workload_name](topology, **workload_spec)
 
         # Assign caches to nodes

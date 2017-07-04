@@ -233,9 +233,9 @@ N_REPLICATIONS = 1
 # Remove collectors not needed
 DATA_COLLECTORS = [
            'CACHE_HIT_RATIO',   # Measure cache hit ratio 
-           'LATENCY',           # Measure request and response latency (based on static link delays)
-           'LINK_LOAD',         # Measure link loads
-           'PATH_STRETCH',      # Measure path stretch
+#           'LATENCY',           # Measure request and response latency (based on static link delays)
+#           'LINK_LOAD',         # Measure link loads
+#           'PATH_STRETCH',      # Measure path stretch
                    ]
 
 
@@ -258,16 +258,16 @@ N_MEASURED_REQUESTS = 6*10**5
 REQ_RATE = 1.0
 
 # Cache eviction policy
-CACHE_POLICY = 'LRU'
+CACHE_POLICY = ['LRU']#, '2Q', 'C2Q']#, 'LRU', 'ARC']
 
 # Zipf alpha parameter, remove parameters not needed
 #ALPHA = [0.6, 0.8, 1.0]
-ALPHA = [0.6, 1.0]
+ALPHA = [0.8]
 
 # Total size of network cache as a fraction of content population
 # Remove sizes not needed
 #NETWORK_CACHE = [0.004, 0.002]
-NETWORK_CACHE = [0.01]
+NETWORK_CACHE = [0.1]
 
 
 # List of topologies tested
@@ -276,7 +276,7 @@ NETWORK_CACHE = [0.01]
 TOPOLOGIES =  [
         'GEANT',
 #        'WIDE',
-        'GARR',
+#        'GARR',
 #        'TISCALI',
               ]
 
@@ -291,7 +291,7 @@ STRATEGIES = [
 #     'HR_MULTICAST',    # Multicast hash-routing
 #     'HR_HYBRID_AM',    # Hybrid Asymm-Multicast hash-routing
 #     'HR_HYBRID_SM',    # Hybrid Symm-Multicast hash-routing
-     'CL4M',            # Cache less for more
+#     'CL4M',            # Cache less for more
 #     'PROB_CACHE',      # ProbCache
 #     'LCD',             # Leave Copy Down
 #     'RAND_CHOICE',     # Random choice: cache in one random cache on path
@@ -309,20 +309,37 @@ default['workload'] = {'name':       'STATIONARY',
                        'n_warmup':   N_WARMUP_REQUESTS,
                        'n_measured': N_MEASURED_REQUESTS,
                        'rate':       REQ_RATE}
+
+#default['workload'] = {'name':       'TRACE_DRIVEN',
+#                       'reqs_file':  './req_youtube.log.dat' ,
+#                       'contents_file':  './content_youtube.log.dat' ,
+#                       'n_contents':   N_CONTENTS,
+#                       'n_warmup':   N_WARMUP_REQUESTS,
+#                       'n_measured': N_MEASURED_REQUESTS,
+#                       'rate':       REQ_RATE}
+#
+
 default['cache_placement']['name'] = 'UNIFORM'
 default['content_placement']['name'] = 'UNIFORM'
-default['cache_policy']['name'] = CACHE_POLICY
+
+
+
+
+
+#default['cache_policy']['name'] = CACHE_POLICY
 
 # Create experiments multiplexing all desired parameters
 for alpha in ALPHA:
     for strategy in STRATEGIES:
         for topology in TOPOLOGIES:
             for network_cache in NETWORK_CACHE:
-                experiment = copy.deepcopy(default)
-                experiment['workload']['alpha'] = alpha
-                experiment['strategy']['name'] = strategy
-                experiment['topology']['name'] = topology
-                experiment['cache_placement']['network_cache'] = network_cache
-                experiment['desc'] = "Alpha: %s, strategy: %s, topology: %s, network cache: %s" \
-                                     % (str(alpha), strategy, topology, str(network_cache))
-                EXPERIMENT_QUEUE.append(experiment)
+                for cache_policy in CACHE_POLICY:
+                    default['cache_policy']['name'] = cache_policy
+                    experiment = copy.deepcopy(default)
+                    experiment['workload']['alpha'] = alpha
+                    experiment['strategy']['name'] = strategy
+                    experiment['topology']['name'] = topology
+                    experiment['cache_placement']['network_cache'] = network_cache
+                    experiment['desc'] = "Alpha: %s, strategy: %s, topology: %s, network cache: %s" \
+                                         % (str(alpha), strategy, topology, str(network_cache))
+                    EXPERIMENT_QUEUE.append(experiment)

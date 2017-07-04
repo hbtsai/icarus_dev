@@ -27,7 +27,7 @@ __all__ = [
         'TimeShiftCache',
         'ArcCache',
         'LruCache',
-        'CentralityLruCache',
+        'CTwoQueueCache',
         'HopLruCache',
         'SegmentedLruCache',
         'InCacheLfuCache',
@@ -1301,18 +1301,28 @@ class TimeShiftCache(Cache):
     def clear(self):
         self._cache.clear()
 
-@register_cache_policy('2Q')
-class TwoQueueCache(Cache):
-    """Two Queue (2Q) cache eviction policy.
+
+@register_cache_policy('C2Q')
+class CTwoQueueCache(Cache):
+    """Centrality-aware Two Queue (2Q) cache eviction policy.
 
     """
 
     @inheritdoc(Cache)
     def __init__(self, maxlen, **kwargs):
+        """
+        print 'betw=',kwargs['betw'] 
+        print 'avg_betw=',kwargs['avg_betw'] 
+        """
+        print 'central_router=', kwargs['central_router']
+        
         self._A1 = LinkedSet()
         self._Am = LinkedSet()
         self._maxlen = int(maxlen)
-        self._a1len = self._maxlen / 5 
+        if kwargs['central_router']:
+            self._a1len = int(self._maxlen / 3)
+        else:
+            self._a1len = int(self._maxlen / 2)
         self._amlen = self._maxlen - self._a1len
         self._cache = {}
         if self._maxlen <= 0:
@@ -1436,25 +1446,21 @@ class TwoQueueCache(Cache):
         self._A1.clear()
         self._Am.clear()
 
-@register_cache_policy('CLRU')
-class CentralityLruCache(Cache):
-    """Least Recently Used (LRU) cache eviction policy.
 
-    According to this policy, When a new item needs to inserted into the cache,
-    it evicts the least recently requested one.
-    This eviction policy is efficient for line speed operations because both
-    search and replacement tasks can be performed in constant time (*O(1)*).
+@register_cache_policy('2Q')
+class TwoQueueCache(Cache):
+    """Two Queue (2Q) cache eviction policy.
 
-    This policy has been shown to perform well in the presence of temporal
-    locality in the request pattern. However, its performance drops under the
-    Independent Reference Model (IRM) assumption (i.e. the probability that an
-    item is requested is not dependent on previous requests).
     """
 
     @inheritdoc(Cache)
     def __init__(self, maxlen, **kwargs):
-        self._cache = LinkedSet()
+        self._A1 = LinkedSet()
+        self._Am = LinkedSet()
         self._maxlen = int(maxlen)
+        self._a1len = int(self._maxlen / 2)
+        self._amlen = self._maxlen - self._a1len
+        self._cache = {}
         if self._maxlen <= 0:
             raise ValueError('maxlen must be positive')
 
@@ -1503,7 +1509,17 @@ class CentralityLruCache(Cache):
         # if it has it push on top, otherwise return false
         if k not in self._cache:
             return False
-        self._cache.move_to_top(k)
+        op = self._cache[k]
+        if op == 1:
+            self._A1.remove(k)
+            self._Am.append_top(k)
+            self._cache[k] = 0
+            if len(self._Am) > self._amlen:
+                evicted = self._Am.pop_bottom()
+                self._cache.pop(evicted)
+        else:
+            self._Am.move_to_top(k)
+#        self._cache.move_to_top(k)
         return True
 
     def put(self, k, *args, **kwargs):
@@ -1524,33 +1540,47 @@ class CentralityLruCache(Cache):
         """
         # if content in cache, push it on top, no eviction
         if k in self._cache:
-            self._cache.move_to_top(k)
-            return None
-        # if content not in cache append it on top
-
-        if kwargs['betw'] > 0.2:
-# add to freq list 
+            op = self._cache[k]
+            if op == 1:
+#                print ('k is one-pass, move' , k , 'to Am')
+                self._A1.remove(k)
+                self._Am.append_top(k)
+                self._cache[k] = 0 # not op (one-pass)
+                if len(self._Am) > self._amlen:
+                    evicted = self._Am.pop_bottom()
+                    self._cache.pop(evicted)
+            else:
+#                print ('k is not one-pass, move' , k , 'to Am top')
+                self._Am.move_to_top(k)
         else:
-                #add to recent list
-
-
-        if len(self._cache) == self._maxlen:
-            self._cache.pop_bottom()
-
-        self._cache.append_top(k)
-
-        return True
+            # if content not in cache append it on top
+#            print ('k is one-pass, insert' , k , 'to A1 top')
+            self._A1.append_top(k)
+            self._cache[k] = 1 # op (one-pass)
+            if len(self._A1) > self._a1len:
+                evicted = self._A1.pop_bottom()
+                self._cache.pop(evicted)
+        return None
+#        self._cache.append_top(k)
+#        return self._cache.pop_bottom() if len(self._cache) > self._maxlen else None
 
     @inheritdoc(Cache)
     def remove(self, k, *args, **kwargs):
         if k not in self._cache:
             return False
-        self._cache.remove(k)
+        op = self._cache[k]
+        if op == 1:
+            self._A1.remove(k)
+        else:
+            self._Am.remove(k)
+        self._cache.pop(k)
         return True
 
     @inheritdoc(Cache)
     def clear(self):
         self._cache.clear()
+        self._A1.clear()
+        self._Am.clear()
 
 
 @register_cache_policy('LRU')
