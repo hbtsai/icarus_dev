@@ -42,6 +42,8 @@ __all__ = [
            ]
 
 
+@register_cache_policy('HYBRID')
+
 class LinkedSet(object):
     """A doubly-linked set, i.e., a set whose entries are ordered and stored
     as a doubly-linked list.

@@ -403,17 +403,35 @@ class NetworkModel(object):
                 max_betw = betw[node]
         avg_betw /= len(betw)
 
-        #print 'betw=', betw
-        # The actual cache objects storing the content
-#        self.cache = {node: CACHE_POLICY[policy_name](cache_size[node], central_router=[False,True][betw[node]>avg_betw], betw=betw[node],avg_betw=avg_betw, **policy_args)
-#                          for node in cache_size}
-        self.cache ={}
+       # sorted_betw = {}
 
-        for node in cache_size:
-            if betw[node] > avg_betw:
-                self.cache[node] = CACHE_POLICY['IN_CACHE_LFU'](cache_size[node],  **policy_args)
-            else:
-                self.cache[node] = CACHE_POLICY['LRU'](cache_size[node],  **policy_args)
+#        print betw
+        sorted_betw =  sorted(betw.items(), key=lambda value: value[1], reverse=True)
+#        print sorted_betw
+
+        
+        #thres_betw = sorted_betw[2][1]
+        thres_betw = avg_betw
+
+        # The actual cache objects storing the content
+
+        if policy_name=='HYBRID':
+            hybrid=True
+        else:
+            hybrid=False
+
+        if hybrid:
+            self.cache ={}
+            for node in cache_size:
+                if betw[node] >= thres_betw:
+                    self.cache[node] = CACHE_POLICY['IN_CACHE_LFU'](cache_size[node],  **policy_args)
+                else:
+                    self.cache[node] = CACHE_POLICY['LRU'](cache_size[node],  **policy_args)
+        else:
+            self.cache = {node: CACHE_POLICY[policy_name](cache_size[node], 
+                central_router=[False,True][betw[node]>avg_betw], 
+                betw=betw[node],avg_betw=avg_betw, **policy_args) 
+                for node in cache_size}
 
         # This is for a local un-coordinated cache (currently used only by
         # Hashrouting with edge cache)
