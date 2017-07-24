@@ -424,7 +424,7 @@ class NetworkModel(object):
             self.cache ={}
             for node in cache_size:
                 if betw[node] >= thres_betw:
-                    self.cache[node] = CACHE_POLICY['IN_CACHE_LFU'](cache_size[node],  **policy_args)
+                    self.cache[node] = CACHE_POLICY['LFU_1'](cache_size[node],  **policy_args)
                 else:
                     self.cache[node] = CACHE_POLICY['LRU'](cache_size[node],  **policy_args)
         else:

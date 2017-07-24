@@ -251,7 +251,7 @@ def run_scenario(settings, params, curr_exp, n_exp):
         # Text description of the scenario run to print on screen
         scenario = tree['desc'] if 'desc' in tree else "Description N/A"
 
-        logger.info('Experiment %d/%d | Preparing scenario: %s', curr_exp, n_exp, scenario)
+        logger.info('Experiment %d/%d | Preparing scenario: %s | %s', curr_exp, n_exp, scenario, cache_policy['name'])
 
         if any(m not in DATA_COLLECTOR for m in metrics):
             logger.error('There are no implementations for at least one data collector specified')

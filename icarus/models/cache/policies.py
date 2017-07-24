@@ -30,6 +30,7 @@ __all__ = [
         'CTwoQueueCache',
         'HopLruCache',
         'SegmentedLruCache',
+        'BigOOneLfuCache',
         'InCacheLfuCache',
         'PerfectLfuCache',
         'FifoCache',
@@ -1981,6 +1982,78 @@ class SegmentedLruCache(Cache):
         for s in self._segment:
             s.clear()
 
+
+@register_cache_policy('LFU_1')
+class BigOOneLfuCache(Cache):
+
+    @inheritdoc(Cache)
+    def __init__(self, maxlen, *args, **kwargs):
+        self._cache = {}
+        self.t = 0
+        self._maxlen = int(maxlen)
+        self._freqlist = defaultdict(LinkedSet)
+        if self._maxlen <= 0:
+            raise ValueError('maxlen must be positive')
+
+    @inheritdoc(Cache)
+    def __len__(self):
+        return len(self._cache)
+
+    @property
+    @inheritdoc(Cache)
+    def maxlen(self):
+        return self._maxlen
+
+    @inheritdoc(Cache)
+    def dump(self):
+        return sorted(self._cache, key=lambda x: self._cache[x], reverse=True)
+
+    @inheritdoc(Cache)
+    def has(self, k, *args, **kwargs):
+        return k in self._cache
+
+    @inheritdoc(Cache)
+    def get(self, k, *args, **kwargs):
+        if self.has(k):
+            freq, t = self._cache[k]
+            self._cache[k] = freq + 1, t
+            self._freqlist[freq].remove(k)
+            self._freqlist[freq+1].append_top(k)
+            return True
+        else:
+            return False
+
+    @inheritdoc(Cache)
+    def put(self, k, *args, **kwargs):
+        if not self.has(k):
+            self.t += 1
+            self._cache[k] = (1, self.t)
+            self._freqlist[1].append_top(k)
+            if len(self._cache) > self._maxlen:
+                leftmost = min(self._freqlist)
+                #for k in self._freqlist:
+                #    print k
+                #print 'min freq = ', leftmost
+                evicted = self._freqlist[leftmost].pop_bottom()
+                #evicted = min(self._cache, key=lambda x: self._cache[x])
+                self._cache.pop(evicted)
+                if len(self._freqlist[leftmost]) == 0:
+                    self._freqlist.pop(leftmost)
+
+                return evicted
+        return None
+
+    @inheritdoc(Cache)
+    def remove(self, k, *args, **kwargs):
+        if k in self._cache:
+            self._cache.pop(k)
+            return True
+        else:
+            return False
+
+    @inheritdoc(Cache)
+    def clear(self):
+        self._cache.clear()
 
 @register_cache_policy('IN_CACHE_LFU')
 class InCacheLfuCache(Cache):
